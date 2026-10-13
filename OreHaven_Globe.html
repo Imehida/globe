@@ -1,0 +1,1107 @@
+›<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OreHaven Holdings — Operations Globe</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #080f1e;
+  font-family: 'Courier New', Courier, monospace;
+  color: #a8c8e8;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+#hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 18px; border-bottom: 1px solid #1e3a5a; flex-shrink: 0;
+  background: #060d18;
+}
+.sub   { font-size: 9px; letter-spacing: .3em; color: #2e6a9a; margin-bottom: 2px; }
+.title { font-size: 17px; font-weight: bold; letter-spacing: .06em; color: #d4a843; font-family: Georgia, serif; }
+.right { font-size: 9px; letter-spacing: .14em; color: #2a5a8a; text-align: right; line-height: 2; }
+
+/* ── Layout ── */
+#main { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+/* ── Sidebar ── */
+#sb {
+  width: 190px; flex-shrink: 0;
+  background: #060d18;
+  border-right: 1px solid #1a3050;
+  padding: 12px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+  overflow-y: auto;
+}
+.sl { font-size: 9px; letter-spacing: .26em; color: #2e6080; margin: 8px 0 3px; }
+.sl:first-child { margin-top: 0; }
+
+.fb {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 7px; border-radius: 3px; cursor: pointer;
+  font-size: 9px; letter-spacing: .06em;
+  border: 1px solid transparent; background: #0a1828;
+  color: #7aaac8; width: 100%; text-align: left;
+  transition: opacity .18s; font-family: inherit;
+}
+.fb .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.fb.off { opacity: .25; }
+
+.sn { font-size: 20px; color: #d4a843; font-family: Georgia, serif; margin-top: 3px; }
+.ss { font-size: 8px; color: #2a5070; margin-top: 1px; }
+.ab { padding: 6px 8px; background: #100400; border: 1px solid #e85d2a33; border-radius: 3px; font-size: 8px; letter-spacing: .12em; color: #e85d2a; line-height: 1.9; }
+
+/* ── Globe area ── */
+#gw {
+  flex: 1; display: flex;
+  align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 50%, #0d1e38 0%, #080f1e 70%);
+}
+#gs { cursor: grab; display: block; }
+#gs:active { cursor: grabbing; }
+
+/* ── Tooltip ── */
+#tt { display:none; position:absolute; background:#06101e; border:1px solid #2a5a8a; padding:10px 13px; pointer-events:all; max-width:272px; border-radius:5px; z-index:10; max-height:240px; overflow-y:auto; }
+#tt-n { font-size:11px; font-weight:bold; margin-bottom:3px; line-height:1.4; }
+#tt-s { font-size:9px; letter-spacing:.1em; color:#4a8aaa; margin-bottom:5px; }
+#tt-d { font-size:10px; color:#7aaac8; line-height:1.6; }
+#tt-c { font-size:8px; color:#2a5070; margin-top:4px; }
+#tt-link { margin-top:8px; padding-top:7px; border-top:1px solid #1a3a5a; }
+#tt-link a { font-size:9px; letter-spacing:.14em; color:#4ab0ff; text-decoration:none; font-family:'Courier New',monospace; }
+#tt-link a:hover { color:#80d0ff; text-decoration:underline; }
+#hint { position:absolute; bottom:14px; left:16px; font-size:8px; letter-spacing:.12em; color:#1e3a5a; line-height:2; pointer-events:none; }
+#resetB { position:absolute; bottom:14px; right:16px; background:transparent; border:1px solid #1e3a5a; color:#2e6a9a; font-size:8px; letter-spacing:.14em; padding:4px 10px; cursor:pointer; font-family:inherit; border-radius:2px; }
+#resetB:hover { border-color:#4a8aaa; color:#7aaac8; }
+#pauseB { position:absolute; bottom:14px; right:110px; background:transparent; border:1px solid #1e3a5a; color:#2e6a9a; font-size:8px; letter-spacing:.14em; padding:4px 10px; cursor:pointer; font-family:inherit; border-radius:2px; transition:all .2s; }
+#pauseB:hover { border-color:#4a8aaa; color:#7aaac8; }
+#pauseB.paused { border-color:#d4a843; color:#d4a843; }
+#map-btn { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); z-index:5; white-space:nowrap; }
+#map-btn a { background:#06101e; border:1px solid #2a5a8a; color:#4ab0ff; font-family:'Courier New',monospace; font-size:9px; letter-spacing:.14em; padding:5px 14px; text-decoration:none; border-radius:3px; display:block; }
+#map-btn a:hover { background:#0d1e38; color:#80d0ff; }
+@keyframes pulse      { 0%,100%{opacity:.55;transform:scale(1)} 50%{opacity:.05;transform:scale(2.3)} }
+@keyframes alertpulse { 0%,100%{opacity:.7; transform:scale(1)} 50%{opacity:.05;transform:scale(2.8)} }
+@keyframes stormpulse { 0%,100%{opacity:.6; transform:scale(1)} 50%{opacity:.15;transform:scale(1.8)} }
+@keyframes quakepulse { 0%,100%{opacity:.65;transform:scale(1)} 50%{opacity:.05;transform:scale(3.2)} }
+.pr  { animation:pulse      2.8s ease-in-out infinite; }
+.apr { animation:alertpulse 1.4s ease-in-out infinite; }
+.spr { animation:stormpulse 3.5s ease-in-out infinite; }
+.qpr { animation:quakepulse 2.2s ease-in-out infinite; }
+.mk:nth-child(odd) .pr { animation-delay:-1.4s; }
+.mk:nth-child(3n)  .pr { animation-delay: -.7s; }
+.mk { cursor:pointer; }
+.mnmk { cursor:pointer; }
+.quakemk { cursor:pointer; }
+.alertmk { cursor:pointer; }
+.stormmk { cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <div>
+    <div class="sub">TURESA · OREHAVEN HOLDINGS · CANVAZ</div>
+    <div class="title">Global Empire Operations Map</div>
+  </div>
+  <div class="right">
+    <div>57 NODES · 6 CONTINENTS</div>
+    <div>37 ACTIVE + 16 WATCH</div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="sb">
+    <div class="sl">FILTER NODES</div>
+    <!-- injected by JS -->
+    <div class="sl">STATUS</div>
+    <div class="sn" id="sn">57</div>
+    <div class="ss" id="ss">OF 57 NODES SHOWN</div>
+    <div class="sl">AUCTION</div>
+    <div class="ab">FOSTER MINE<br>CLOSES MAY 4<br>PROXY BID ACTIVE</div>
+    <div class="sl">EXPANSION</div>
+    <div style="font-size:9px;color:#2a7a6a;line-height:2.2">● 5yr · W. Africa<br>● 10yr · MENA<br>● 15yr · Mongolia</div>
+    <div class="sl">WATCH INTEL</div>
+    <div style="font-size:9px;color:#3a6a5a;line-height:2.2">HK · SGP · TYO · HNL<br>ANC · DIL · MPM · FIH<br>MRS · RTM · RIO · BOM<br>WVB · IST · BSL · LXR</div>
+    <div class="sl">WEATHER ALERTS</div>
+    <div id="alert-toggle" onclick="toggleAlerts()" style="display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:3px;cursor:pointer;font-size:9px;letter-spacing:.06em;border:1px solid #ff990044;background:#0a1520;color:#ffaa44;width:100%;font-family:inherit;"><span id="alert-dot" style="width:7px;height:7px;border-radius:50%;background:#ff9900;flex-shrink:0"></span><span id="alert-label">LOADING…</span></div>
+    <div id="alert-count" style="font-size:8px;color:#664400;padding:2px 7px;line-height:2"></div>
+    <div class="sl">HURRICANE TRACKS</div>
+    <div id="storm-toggle" onclick="toggleStorms()" style="display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:3px;cursor:pointer;font-size:9px;letter-spacing:.06em;border:1px solid #ff44aa44;background:#0a1520;color:#ff88cc;width:100%;font-family:inherit;"><span id="storm-dot" style="width:7px;height:7px;border-radius:50%;background:#ff44aa;flex-shrink:0"></span><span id="storm-label">LOADING…</span></div>
+    <div id="storm-count" style="font-size:8px;color:#662244;padding:2px 7px;line-height:2"></div>
+    <div class="sl">EARTHQUAKES (24H)</div>
+    <div id="quake-toggle" onclick="toggleQuakes()" style="display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:3px;cursor:pointer;font-size:9px;letter-spacing:.06em;border:1px solid #cc880044;background:#0a1520;color:#ddaa66;width:100%;font-family:inherit;"><span id="quake-dot" style="width:7px;height:7px;border-radius:50%;background:#cc8800;flex-shrink:0"></span><span id="quake-label">LOADING…</span></div>
+    <div id="quake-count" style="font-size:8px;color:#554400;padding:2px 7px;line-height:2"></div>
+    <div class="sl">MAJOR MINES</div>
+    <div id="mineral-toggle" onclick="toggleMinerals()" style="display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:3px;cursor:pointer;font-size:9px;letter-spacing:.06em;border:1px solid #b8733344;background:#0a1520;color:#c8a060;width:100%;font-family:inherit;"><span id="mineral-dot" style="width:7px;height:7px;background:transparent;border:2px solid #b87333;transform:rotate(45deg);flex-shrink:0"></span><span id="mineral-label">LOADING…</span></div>
+    <div id="mineral-count" style="font-size:8px;color:#553300;padding:2px 7px;line-height:2"></div>
+
+    <div class="sl">THE NORTH AMERICAN AQUEDUCT WATER PIPELINE NETWORK</div>
+    <div id="pipe-toggle" onclick="togglePipeline()" style="display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:3px;cursor:pointer;font-size:9px;letter-spacing:.06em;border:1px solid #00aaff44;background:#0a1520;color:#44ccff;width:100%;font-family:inherit;"><span id="pipe-dot" style="width:7px;height:7px;border-radius:50%;background:#00aaff;flex-shrink:0"></span><span>PIPELINE NETWORK</span></div>
+    <div style="font-size:8px;padding:4px 7px;line-height:2.1;color:#224455">
+      <span style="color:#00aaff">◉</span> Phase 1 — San Onofre → Lake Mead<br>
+      <span style="color:#44ee88">◉</span> Phase 2 → Utah / Great Salt Lake<br>
+      <span style="color:#ffcc00">◉</span> Phase 3 → Idaho / Snake River<br>
+      <span style="color:#ff6644">◉</span> Phase 4 → Montana / Missouri River<br>
+      <span style="color:#cc88ff">◉</span> Phase 5 → Alberta / Saskatchewan River<br>
+      <span style="color:#ff88aa">◉</span> Phase 6 → Rio Grande / New Mexico Spur<br>
+      <span style="color:#ffaa33">◉</span> Phase 7 → Texas Panhandle / Lake Meredith<br>
+      <span style="color:#44dddd">◉</span> Phase 8 → Wyoming / Upper Colorado Basin
+    </div>
+  </div>
+  <div id="gw">
+    <svg id="gs"></svg>
+    <div id="tt"><div id="tt-n"></div><div id="tt-s"></div><div id="tt-d"></div><div id="tt-c"></div><div id="tt-link"></div></div>
+    <div id="map-btn"><a href="OreHaven_Map.html">VIEW FLAT MAP</a></div>
+    <div id="hint">DRAG · ROTATE &nbsp;/&nbsp; SCROLL · ZOOM</div>
+    <button id="pauseB">⏸ PAUSE</button>
+    <button id="resetB">RESET VIEW</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  NODE TYPE CONFIG
+// ═══════════════════════════════════════════════════════════
+const CFG = {
+  claim:      { color:'#d4a843', label:'Active claim',        r:6 },
+  auction:    { color:'#e85d2a', label:'Auction / disputed',  r:8 },
+  industrial: { color:'#4ab0ff', label:'US industrial',       r:5 },
+  canada:     { color:'#1aae8a', label:'Canada node',         r:5 },
+  australia:  { color:'#a07040', label:'Australia node',      r:5 },
+  uk:         { color:'#8a60d8', label:'UK node',             r:5 },
+  caribbean:  { color:'#0898c4', label:'Caribbean node',      r:6 },
+  partner:    { color:'#b060f0', label:'Processing partner',  r:6 },
+  watch:      { color:'#d03030', label:'Intel watch',         r:5, dashed:true },
+};
+
+// ═══════════════════════════════════════════════════════════
+//  NODES
+//  ADD:    copy any entry, give new id, set lat/lon/type/status/detail
+//  REMOVE: delete the object
+//  MOVE:   change lat and lon
+// ═══════════════════════════════════════════════════════════
+const LOCS = [
+  {id:1,  name:'Tri-Metallic / Copper Belle', lat:37.5080, lon:-117.2290, type:'claim',
+    status:'Active claim · Nevada',
+    detail:'Polymetallic surface dumps · Site visit completed March 2026 · Samples at Paragon Geochemical · Recategorized medium-term due to terrain and road development requirements'},
+  {id:2,  name:'Mt. Harvard', lat:38.9341, lon:-106.2663, type:'claim',
+    status:'Primary gold asset · Colorado',
+    detail:'Free-milling gold · Phase 1 capital target · Core mining vertical anchor · StillBright processing partnership commercial timeline to 2029'},
+  {id:7,  name:'Mt. Champion Mine (Terra Firma)', lat:39.1398, lon:-106.4942, type:'auction',
+    status:'Auction — closes May 4 · Colorado',
+    detail:'Proxy bid set · BLM priority assertion filed citing General Mining Law of 1872 and 43 CFR § 3832.11 · Active boundary conflict with GLH Minerals on PT 28 · David Carvalo contact at Nevada State Office · Docket System map scans pending'},
+  {id:8,  name:'TCB Metals & Refining', lat:33.45, lon:-112.07, type:'partner',
+    status:'Processing partner · Phoenix AZ',
+    detail:'POC operational target · Ore drive route from Nevada claims · Fall Las Vegas trip proof-of-concept · Sunbelt Rentals mini excavator training planned'},
+  {id:9,  name:'CJK Milling', lat:39.25, lon:-106.29, type:'partner',
+    status:'Processing partner · Leadville CO',
+    detail:'POC operational target · Ore drive route from Mt. Harvard and Mt. Champion claims · Summer 2027 Colorado trip proof-of-concept'},
+  {id:10,  name:'Henderson NV — Mountain Industrial Complex', lat:36.04, lon:-114.98, type:'industrial', status:'Western Hub 1', detail:'80,440 SF · Rail spur · 8 cranes · 4,000A power · Tri-Metallic 3hr drive'},
+  {id:11, name:'Rock Springs WY — Halliburton Audrey II', lat:41.59, lon:-109.20, type:'industrial', status:'Western Hub 2', detail:'226,639 SF · UP rail · I-80 corridor · Coverage: WY + CO + UT'},
+  {id:12, name:'Albuquerque NM', lat:35.08, lon:-106.65, type:'industrial', status:'Western Hub 3', detail:'Rail hub I-40 corridor · Coverage: NM + AZ + TX · Eastern handoff for copper concentrate'},
+  {id:13, name:'Filer ID — 529 North St', lat:42.57, lon:-114.60, type:'industrial', status:'Western Hub 4', detail:'131,464 SF · Rail spur · Coverage: ID + eastern OR + southern MT'},
+  {id:14, name:'Willow Glen Terminal — St. Gabriel LA', lat:30.27, lon:-91.10, type:'industrial', status:'Gulf Anchor', detail:'234 acres · Mississippi River frontage · 450 MW power · 2.26M bbl storage · Deep water dock · Gulf + international export gateway'},
+  {id:15, name:'5800 Peachtree — Chamblee GA', lat:33.88, lon:-84.34, type:'industrial', status:'Southeast Hub', detail:'210,000 SF · Active rail spur · I-285/I-85 interchange · 500K labor pool'},
+  {id:16, name:'Columbia Nitrogen — Augusta GA', lat:33.47, lon:-81.97, type:'industrial', status:'CROWN JEWEL 1 · Smelter-Refinery', detail:'600 acres · CSX rail · Copper concentrate to cathode · Opportunity Zone · Primary southeast anchor and OreHaven crown jewel'},
+  {id:17, name:'Cooper River — Moncks Corner SC', lat:33.20, lon:-79.97, type:'industrial', status:'Atlantic Export Node', detail:'390 acres · Former DuPont · 35 MW power · Rail + barge · Port of Charleston 30 miles'},
+  {id:18, name:'Parkersburg Steel Yards WV', lat:39.27, lon:-81.56, type:'industrial', status:'Ohio River Connector', detail:'60 acres · CSX main line · Ohio River barge cells · Opportunity Zone · ~$3M'},
+  {id:19, name:'Hot Strip Mill — River Rouge MI', lat:42.27, lon:-83.14, type:'industrial', status:'CROWN JEWEL 2 · Great Lakes', detail:'228 acres · 1.5M SF · Detroit River · THREE Class 1 railroads · Future smelting + refining + fabrication hub · OreHaven crown jewel'},
+  {id:20, name:'Canalside Energy Park — Fort Edward NY', lat:43.27, lon:-73.58, type:'industrial', status:'Northeast Interior Node', detail:'78.84 acres · 8,410 LF rail · 34.5 KV substation · Opportunity Zone · ~$8M'},
+  {id:21, name:'Bellevue Industrial — Omaha NE', lat:41.14, lon:-95.92, type:'industrial', status:'Central Plains / Omaha Anchor', detail:'120 acres · Heavy manufacturing zoning · Potential rail spur · Adjacent Offutt AFB · ~$8M'},
+  {id:22, name:'Manufacturing Campus — Newton KS', lat:38.05, lon:-97.35, type:'industrial', status:'Central Plains / Wichita Corridor', detail:'238,700 SF / 3 buildings · Rail · 11 MW power · Former MasterBrand · I-135 · 25 mi north Wichita'},
+  {id:23, name:'Cherryvale KS', lat:37.27, lon:-95.55, type:'industrial', status:'Central Plains / Four Corners Gateway', detail:'54,439 SF · Watco rail · Heavy power · Opportunity Zone · ~$690K · 50 mi north Port of Catoosa · Arkansas River barge to Mississippi'},
+  {id:24, name:'Mount Shasta CA — 210 Ski Village Dr', lat:41.31, lon:-122.31, type:'industrial', status:'Water Node / Pacific Gateway', detail:'147,400 SF Class A · 266 acres · 500K gal/day certified spring · 8,200A power · McCloud RR to UP easement · I-5 · ~$7.6M'},
+  {id:25, name:'Soda Springs ID — Bailey Creek Rd', lat:42.65, lon:-111.57, type:'industrial', status:'Water Node / Intermountain', detail:'90 acres · Bear River frontage · ~1M gal/day mineral spring · Former Twin Springs Bottling · ~$2M asking'},
+  {id:26, name:'West Valley Industrial Rail Center — El Mirage AZ', lat:33.59, lon:-112.32, type:'industrial', status:'CANVAZ / Arizona Anchor', detail:'10–67 acres shovel-ready · BNSF rail · FTZ · M-2 heavy industrial · Luke AFB adjacent · TSMC supply chain · 2M labor pool'},
+  {id:27, name:'17300 Silica Rd — Victorville CA', lat:34.48, lon:-117.30, type:'industrial', status:'CANVAZ / High Desert Nexus', detail:'336,000 SF / 43.97 acres · 3 BNSF rail spurs · 10,000 amps · M-2T zoning · I-15 between LA basin and Las Vegas · ~$39M'},
+  {id:28, name:'5177 Chino Ave — Chino CA', lat:34.01, lon:-117.68, type:'industrial', status:'CANVAZ / Inland Empire Gateway', detail:'54,936 SF / 3.45 acres · Active Union Pacific rail · 50 mi to Port of LA/Long Beach · Ontario Airport 7 min'},
+  {id:29, name:'Infill Industrial — Fargo ND', lat:46.87, lon:-96.79, type:'industrial', status:'Northern Plains Extension', detail:'136,217 SF / 14.81 acres · BNSF rail spur · I-29 + I-94 · ND: no corporate or personal income tax'},
+  {id:30, name:'791 Santa Fe Pike — Columbia TN', lat:35.62, lon:-87.04, type:'industrial', status:'Mid-South Fabrication / EV Corridor', detail:'$14.9M · 150 acres · 87,000 SF + 3 buildings · TWO rail spurs · Former GrafTech graphite electrode plant · Spring Hill GM EV 15 mi · VW Chattanooga 90 mi · Copper rod/wire/busbar for EV corridor'},
+  {id:31, name:'3216 Cedar Creek Rd — Fayetteville NC', lat:35.05, lon:-78.88, type:'industrial', status:'Mid-Atlantic Southeast Anchor', detail:'221 acres · Cape Fear River to Port of Wilmington · 150-car rail storage (largest in network) · Two Duke Energy substations · Fort Liberty adjacent · NC Brownfields 5yr tax reduction'},
+  {id:32, name:'815 8th St — Hoquiam WA (US Pacific Shipyard)', lat:46.98, lon:-123.90, type:'industrial', status:'US Pacific Maritime Gateway', detail:'$12M · 75.5 acres · Grays Harbor deep-water port · BNSF + UP rail · Opportunity Zone · 38ft dredged channel (Handysize-capable)'},
+  {id:33, name:'Industrial Plant — Birmingham AL', lat:33.51, lon:-86.77, type:'industrial', status:'Deep South Processing Anchor', detail:'$20M (originally $200M) · 121,983 SF · 3 Norfolk Southern rail spurs · POTENTIAL 50 MW: most electrically capable US node · 28 silos / 180,000 cu ft dry bulk · Electrowinning/electrorefining at scale'},
+  {id:34, name:'430 E South Island St — Appleton WI', lat:44.26, lon:-88.37, type:'industrial', status:'Upper Great Lakes Anchor', detail:'250,000 SF / 20.5 acres / built 2016 for $120M · ALL EQUIPMENT IN PLACE · DAM + 6 GENERATORS ON FOX RIVER: own hydroelectric power · Fox River to Great Lakes to Atlantic Seaway to River Rouge'},
+  {id:35, name:'29 & 17-25 53rd St — Sunset Park Brooklyn NY', lat:40.651, lon:-74.023, type:'industrial', status:'NYC / Atlantic Seaboard Terminus', detail:'Double parcel Block 803 · Same block as Narrows Generating Station · Long-term play: only privately owned maritime terminal in Brooklyn · Atlantic chain: Augusta → Moncks Corner → Fayetteville → Fort Edward → BROOKLYN'},
+  {id:36, name:'4010 Ch Saint-Andre — Jonquiere QC', lat:48.43, lon:-71.25, type:'canada', status:'Quebec / St. Lawrence Gateway', detail:'$6.395M USD · 168 acres decontaminated · CN Rail · Port of Grande-Anse Panamax deep-water · Hydro-Quebec cheapest industrial electricity in North America · Completes Canadian arc: Butedale → Prince George → Brooks → Jonquiere (5,000 km)'},
+  {id:37, name:'184075 7 St E — Brooks AB', lat:50.58, lon:-111.90, type:'canada', status:'Canadian Prairie Staging', detail:'~$970K USD · 25-car rail siding · CPKC Trans-Canada main line · 120 km from Crowsnest Pass / BC Kootenay mining · Lowest cost acquisition in network'},
+  {id:38, name:'6565 Industrial Way — Prince George BC', lat:53.92, lon:-122.75, type:'canada', status:'Canadian Interior Anchor', detail:'93.30 acres · BCR/CN Rail spur · Helicopter hangar · Yellowhead Hwy (Prince Rupert to Edmonton) · Geographic center of BC · 100% leased existing income · ~$10.8M USD'},
+  {id:39, name:'Butedale Bay — Princess Royal Island BC', lat:52.17, lon:-128.00, type:'canada', status:'Pacific / Arctic Gateway', detail:'~$7.5M · 30 acres deeded freehold · ONLY private land on Princess Royal Island · Deep tidewater bay · 1 MW run-of-river hydroelectric · Former Canada Customs Port of Entry · Inside Passage transit for BC coastal + Alaska ore'},
+  {id:40, name:'12-22 Frances Bay Drive — Darwin NT', lat:-12.462, lon:130.848, type:'australia', status:'Northern Territory / Indo-Pacific Gateway', detail:'7.795 ha across 4 titles · Frances Bay waterfront + submerged/foreshore title · ONLY private maritime industrial land outside Port of Darwin Landbridge 99yr lease · Closest Australian port to SE Asia (Timor-Leste 700km)'},
+  {id:41, name:'24-28 Cormorant Rd — Kooragang Island NSW', lat:-32.856, lon:151.768, type:'australia', status:'East Australia / Port of Newcastle', detail:'70.88 hectares (175 acres) freehold: largest Australian holding · Port of Newcastle: world\'s largest coal export port · First freehold subdivision on Kooragang in 30+ years: irreplaceable by definition'},
+  {id:42, name:'Lot 11 Albert Terrace — Port Pirie SA', lat:-33.185, lon:138.015, type:'australia', status:'South Australia / Nyrstar Adjacency', detail:'Adjacent to Nyrstar Port Pirie: one of world\'s largest multi-metals smelters · November 2025: first ANTIMONY metal cast · SA Gawler Craton hosts Olympic Dam (BHP): world\'s largest single deposit of copper + gold + silver + uranium simultaneously'},
+  {id:43, name:'26-28 Westall Rd — Springvale VIC', lat:-37.937, lon:145.141, type:'australia', status:'Victoria / Melbourne Rail Node', detail:'3.79 ha Industrial 1 · Westall train station 336m · Port of Melbourne 20km: Australia\'s largest container port · Rail access: rarest feature in Australian portfolio'},
+  {id:44, name:'15 Beach St — Kwinana Beach WA', lat:-32.243, lon:115.778, type:'australia', status:'Western Australia / Westport + AUKUS Henderson', detail:'100% leased triple net to 2032 (passive income) · 1.9km from WESTPORT container port ($7.2B AUD) · ~5km from Henderson Defence Precinct ($12B AUD) · AUKUS Submarine Rotational Force West: 4 US Virginia-class + 1 UK sub at HMAS Stirling from 2027'},
+  {id:45, name:'Middleton Rd — Morecambe/Heysham Lancashire UK', lat:54.02, lon:-2.90, type:'uk', status:'UK / Irish Sea Gateway', detail:'11 acres · Port of Heysham: RoRo to Ireland (Dublin + Belfast) · Adjacent to UK\'s LARGEST ONSHORE ELECTRICITY SUBSTATION · B2/B8 planning consent granted · UK copper demand rising 40–60% (offshore wind, heat pumps, EV, Victorian grid replacement)'},
+  {id:46, name:'Estate VI Corps Land — St. Croix USVI', lat:17.70, lon:-64.755, type:'caribbean', status:'Caribbean Gateway / Jones Act-Exempt', detail:'$90M · 1,244 acres heavy industrial · 1,100\'×1,800\' turning basin + 7,000\'×300\' channel at 35\' depth (PANAMAX) · JONES ACT FULL EXEMPTION · FTZ eligible · USVI EDC near-zero corporate tax · Captain Morgan Distillery (Diageo) existing tenant · 2,400 mi from Dakar Senegal'},
+  {id:47, name:'Hong Kong — IPC Centre, Fanling NT', lat:22.494, lon:114.138, type:'watch', status:'Intelligence Watch · Greater Bay Area', detail:'No active acquisition · Financial intermediation: HK entity 16.5% profits tax, zero capital gains · Forum Macao = China\'s Lusophone gateway · Northern Metropolis development zone tailwind'},
+  {id:48, name:'Bissau — Guinea-Bissau', lat:11.863, lon:-15.598, type:'watch', status:'Intelligence Watch · W. Africa · 5yr Target', detail:'No acquisition · Future West African commodity trading base · State Dept professor connection = existing diplomatic relationship · Muslim majority: cultural alignment · St. Croix USVI ~2,200nm west'},
+  {id:49, name:'Luxor — Upper Egypt', lat:25.687, lon:32.639, type:'watch', status:'Intelligence Watch · MENA · 10yr Target', detail:'No acquisition · Future MENA commodity trading and Eastern Desert mining base · Arabic language study ongoing · Sukari mine (Africa\'s largest primary gold mine ~450K oz/yr) · Eastern Desert: copper, zinc, silver, rare earth deposits'},
+  {id:50, name:'Singapore', lat:1.352, lon:103.820, type:'watch', status:'Intelligence Watch · Indo-Pacific', detail:'No acquisition · Singapore Freeport: gold + silver duty-free · LME-approved copper warehouses · Strait of Malacca: ~40% of global seaborne trade · No capital gains tax'},
+  {id:51, name:'Rotterdam — Port of Rotterdam', lat:51.905, lon:4.193, type:'watch', status:'Intelligence Watch · European Distribution', detail:'No acquisition · Largest European port (400M+ tonnes/yr) · LME primary copper warehouse location · CBAM full implementation 2026: EU carbon tariff on metals · Dutch Cooperatief UA: most favorable EU holding structure'},
+  {id:52, name:'Rio de Janeiro — Centro', lat:-22.906, lon:-43.172, type:'watch', status:'Intelligence Watch · Lusophone World', detail:'No acquisition · Vale HQ (world\'s 2nd largest mining co.) · Lusophone Atlantic Triangle: Rio → Bissau 4,900km, Rio → Luanda 5,800km · Brazil: world\'s largest iron ore, niobium, tantalum producer'},
+  {id:53, name:'Mumbai — Bandra Kurla Complex', lat:18.930, lon:72.835, type:'watch', status:'Intelligence Watch · South Asia', detail:'No acquisition · India copper deficit: 750K+ tonnes demand vs 555K production · Demand to DOUBLE by 2030 · India: 5th largest gold importer ($47B/yr) · MCX commodity exchange · 100% FDI allowed in mining'},
+  {id:54, name:'Walvis Bay — Namibia', lat:-22.957, lon:14.505, type:'watch', status:'Intelligence Watch · Southern Africa Atlantic', detail:'No acquisition · Haib copper: one of Africa\'s largest undeveloped deposits · Namibia: world\'s 2nd largest uranium producer · Tsumeb Smelter: accepts complex concentrates mainstream smelters refuse'},
+  {id:55, name:'Istanbul — Bosphorus', lat:41.013, lon:28.978, type:'watch', status:'Intelligence Watch · Eurasian Bridge', detail:'No acquisition · Bosphorus: sole maritime chokepoint between Black Sea and Mediterranean · Turkey: copper producer + major fabricator · Central Asia gateway: Azerbaijan, Georgia, Kazakhstan, Uzbekistan copper + uranium'},
+  {id:56, name:'Tokyo — Marunouchi / Shimbashi', lat:35.681, lon:139.767, type:'watch', status:'Intelligence Watch · Japan Triple-Function', detail:'No acquisition · (1) BUYER refined copper/gold/silver; (2) REFINER via JX Metals, Sumitomo, Mitsubishi; (3) HOKKAIDO MINING intelligence · Japan copper $18.14B → $25.48B by 2030 · Omui drill: 24.22 g/t Au + 173.40 g/t Ag'},
+  {id:57, name:'Honolulu — Hawaii (Kakaako / Honolulu Harbor)', lat:21.307, lon:-157.858, type:'watch', status:'Intelligence Watch · Pacific Transit Node',
+    detail:'No acquisition · 2,400mi from LA · 5,100mi from Tokyo · 5,300mi from Sydney · Last Jones Act waypoint before Pacific international routing · jurisdictional handoff between domestic and international Pacific trade · Pearl Harbor / INDOPACOM proximity · Alaska mineral flow monitoring'},
+  {id:58, name:'Anchorage — Alaska (South Anchorage Industrial)', lat:61.174, lon:-149.863, type:'watch', status:'Intelligence Watch · Alaska Ore Staging',
+    detail:'No acquisition · Lay down yard and warehouse for ore stockpiling from future Alaska interior mines · Red Dog (world\'s largest zinc mine), Greens Creek (silver), Pogo (gold) all route through Anchorage logistics network · Alaska Railroad connects to Seward deep-water port · staging point between Alaska mining districts and Pacific routing via Hawaii'},
+  {id:59, name:'Dili — Timor-Leste', lat:-8.556, lon:125.578, type:'watch', status:'Intelligence Watch · Lusophone Indo-Pacific',
+    detail:'No acquisition · Lusophone Pacific node — Portuguese official language · Darwin 700km northwest: Frances Bay vessels directly service Timor-Leste · Forum Macao member · Greater Sunrise gas field (5.1T cu ft) offshore revenue 70% to Timor-Leste · AUKUS Indo-Pacific strategic zone adjacency · bridges Lusophone network to Indo-Pacific arc'},
+  {id:60, name:'Maputo — Mozambique', lat:-25.891, lon:32.605, type:'watch', status:'Intelligence Watch · Lusophone Indian Ocean',
+    detail:'No acquisition · Lusophone Indian Ocean anchor · Portuguese official language · Rovuma Basin: world\'s largest undeveloped gas reserves (TotalEnergies, ExxonMobil, ENI) · Tete Province coal · graphite (EV battery anodes) · Maputo Port: rail into South Africa\'s Witwatersrand and Zimbabwe copper belt · Forum Macao member · complements Walvis Bay (Atlantic) for southern Africa dual-coast coverage'},
+  {id:61, name:'Kinshasa — Democratic Republic of Congo', lat:-4.322, lon:15.322, type:'watch', status:'Intelligence Watch · DRC Copper-Cobalt',
+    detail:'No acquisition · DRC holds estimated 3.5B tonnes copper reserves (largest outside Chile) · Kamoa-Kakula (Ivanhoe/Zijin): world\'s largest high-grade copper deposit, ~450K tonnes/yr · DRC produces 70%+ of world cobalt · CAMI concession intelligence · Chinese mining (CMOC, Zijin) are largest investors — HK/Singapore nodes positioned adjacent to those buyers · French primary commercial language'},
+  {id:62, name:'Marseille — Port de Marseille Fos', lat:43.296, lon:5.381, type:'watch', status:'Intelligence Watch · Mediterranean Gateway',
+    detail:'No acquisition · France\'s primary Mediterranean port · 2.5hr from Monaco precious metals market · 5hr from Geneva commodity trading hub (Mercuria, Glencore, Geneva Freeport $100B+ gold/silver vaults) · Fos-sur-Mer industrial zone: LME-approved metals warehousing · French language anchor for Francophone West Africa (Senegal, Guinea, Ivory Coast) · North Africa proximity: Algiers 750nm, Tunis 550nm'},
+];
+
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let rot  = [-265, -35, 0];
+let sc   = 280;
+let drag = false, lastXY = null;
+let world   = null;
+let subData = null;
+let alerts  = [];
+let storms  = [];
+let quakes  = [];
+let mineralsVisible = true;
+let pipelineVisible = true;
+
+// ── THE NORTH AMERICAN AQUEDUCT WATER PIPELINE NETWORK ────────────────────────────────────────────
+const PIPE_PHASES = {
+  1: { color:'#00aaff', dash:'6,4' },
+  2: { color:'#44ee88', dash:'8,4' },
+  3: { color:'#ffcc00', dash:'8,4' },
+  4: { color:'#ff6644', dash:'8,4' },
+  5: { color:'#cc88ff', dash:'8,4' },
+  6: { color:'#ff88aa', dash:'5,5' },
+  7: { color:'#ffaa33', dash:'5,5' },
+  8: { color:'#44dddd', dash:'5,5' },
+};
+
+const PIPE_NODES = [
+  // Phase 1: San Onofre → Lake Mead
+  {id:'p1a', n:'San Onofre Desalination Intake',  lat:33.37, lon:-117.55, phase:1, detail:'Pacific Ocean intake · Adjacent SONGS decommissioned site · Reverse osmosis facility · 50-100 MGD initial capacity'},
+  {id:'p1b', n:'Temecula Pass Pump Station',       lat:33.49, lon:-117.10, phase:1, detail:'Coastal mountain crossing · Highest elevation Phase 1 · Maximum pumping energy demand'},
+  {id:'p1c', n:'Coachella Valley Junction',        lat:33.74, lon:-116.22, phase:1, detail:'Enters Colorado Desert · BLM federal land corridor · Salton Sea branch point'},
+  {id:'p1d', n:'Salton Sea Restoration Outlet',   lat:33.15, lon:-115.80, phase:1, detail:'Secondary outlet · Ecological restoration · Below sea level — gravity fed · Sea level stabilization'},
+  {id:'p1e', n:'Chocolate Mountains Corridor',    lat:33.35, lon:-115.10, phase:1, detail:'DoD Gunnery Range · Federal land easement corridor · Orocopia Mountains parallel'},
+  {id:'p1f', n:'Lower Colorado River Junction',   lat:33.60, lon:-114.50, phase:1, detail:'Colorado River corridor · Bureau of Reclamation jurisdiction · All-American Canal parallel'},
+  {id:'p1g', n:'Parker Dam Injection Point',      lat:34.30, lon:-114.14, phase:1, detail:'First Colorado River injection · Lake Havasu augmentation · AZ-CA border'},
+  {id:'p1h', n:'Hoover Dam / Lake Mead Terminus', lat:36.01, lon:-114.74, phase:1, detail:'Primary Phase 1 terminus · Lake Mead restoration · Hoover Dam hydroelectric recovery · Colorado River Compact distribution'},
+  // Phase 2: → Utah / Great Salt Lake
+  {id:'p2a', n:'Lake Powell Augmentation',        lat:37.06, lon:-111.49, phase:2, detail:'Upper Colorado River basin · Glen Canyon Dam · UT-AZ border · Upper basin compact benefit'},
+  {id:'p2b', n:'Green River UT Junction',         lat:38.99, lon:-110.16, phase:2, detail:'Green River system · Major Colorado tributary · Central Utah corridor'},
+  {id:'p2c', n:'Provo / Utah Lake Node',          lat:40.24, lon:-111.66, phase:2, detail:'Utah Valley distribution · Wasatch Front · ~2.5M people served'},
+  {id:'p2d', n:'Great Salt Lake Restoration',     lat:41.18, lon:-112.49, phase:2, detail:'GSL level restoration · Toxic dust suppression · 50% volume lost since 1960s'},
+  // Phase 3: → Idaho / Snake River
+  {id:'p3a', n:'Bear River Headwaters',           lat:41.98, lon:-111.38, phase:3, detail:'UT-ID border · Bear River system · Feeds Bear Lake and GSL watershed'},
+  {id:'p3b', n:'Soda Springs ID — OreHaven Node', lat:42.66, lon:-111.60, phase:3, detail:'OreHaven water asset · Upper American River watershed · Existing operational presence'},
+  {id:'p3c', n:'American Falls Reservoir',        lat:42.78, lon:-112.86, phase:3, detail:'Snake River system · Idaho agricultural irrigation · Potato / Dairy / Grain · ~500k acre-feet'},
+  {id:'p3d', n:'Twin Falls Snake River Node',     lat:42.56, lon:-114.47, phase:3, detail:'Snake River augmentation · Columbia River tributary · Pacific Northwest watershed'},
+  // Phase 4: → Montana / Missouri headwaters
+  {id:'p4a', n:'Salmon River Mountains Node',     lat:44.88, lon:-114.20, phase:4, detail:'Central Idaho · Continental Divide approach · Pacific→Atlantic watershed transition'},
+  {id:'p4b', n:'Beaverhead Mountains Crossing',   lat:45.20, lon:-113.50, phase:4, detail:'Montana border · Continental Divide crossing · Most technically challenging Phase 4 segment'},
+  {id:'p4c', n:'Trident MT — Missouri Headwaters',lat:45.93, lon:-111.51, phase:4, detail:'Three Forks Montana · Jefferson + Madison + Gallatin → Missouri River · 529,000 sq mi basin · Drains to Mississippi · Maximum upstream leverage for continental watershed restoration'},
+  // Phase 5: → Alberta / Saskatchewan River (Canadian extension)
+  {id:'p5a', n:'Sweetgrass Hills MT — Border Approach', lat:48.50, lon:-111.50, phase:5, detail:'Northern Montana · US-Canada border approach · Boundary Waters Treaty jurisdiction begins · IJC review required · Final US segment'},
+  {id:'p5b', n:'Lethbridge AB — Oldman River Junction',  lat:49.70, lon:-112.83, phase:5, detail:'Alberta Canada · Oldman River system · South Saskatchewan tributary · Agriculture-intensive prairie watershed · Canada-US Boundary Waters Treaty framework'},
+  {id:'p5c', n:'Pincher Creek / Summerview AB',          lat:49.52, lon:-113.97, phase:5, detail:'Primary Canadian terminus · Above Oldman River Dam · Controlled injection into Oldman watershed · South Saskatchewan → Saskatchewan → Lake Winnipeg → Hudson Bay · Directly benefits Alberta and Saskatchewan · Indirect benefit to Manitoba and Minnesota'},
+  // Phase 6: Rio Grande spur — Needles CA → I-40 corridor → Albuquerque → Jemez Canyon
+  {id:'p6a', n:'Needles CA — Tri-State Branch Point',   lat:34.85, lon:-114.62, phase:6, detail:'Spur origin · California-Arizona-Nevada tri-state area · Branches east from main Phase 1 corridor near Parker Dam · I-40 corridor entry point · Data center corridor begins'},
+  {id:'p6b', n:'Kingman AZ — I-40 Waypoint',            lat:35.19, lon:-114.05, phase:6, detail:'Northwestern Arizona · I-40 federal highway corridor · Data center cooling supply node · Arizona high desert industrial corridor'},
+  {id:'p6c', n:'Flagstaff AZ — Plateau Crossing',       lat:35.20, lon:-111.65, phase:6, detail:'Colorado Plateau crossing · Elevation ~7,000 ft · Major pumping station · Northern Arizona University research node · Regional data center and tech infrastructure hub'},
+  {id:'p6d', n:'Gallup NM — Continental Divide',        lat:35.53, lon:-108.74, phase:6, detail:'Continental Divide crossing into Atlantic drainage · New Mexico entry · Navajo Nation territory · Tribal water rights engagement critical · Rio Puerco watershed approach'},
+  {id:'p6e', n:'Albuquerque NM — Rio Grande Junction',  lat:35.08, lon:-106.65, phase:6, detail:'Rio Grande corridor entry · Middle Rio Grande Conservancy District · Sandia National Laboratories · Major data center presence · 700,000+ population water security · Intel and semiconductor manufacturing water demand'},
+  {id:'p6f', n:'Jemez Canyon Reservoir — Rio Grande',   lat:35.60, lon:-106.74, phase:6, detail:'Phase 6 terminus · Jemez River tributary injection · Rio Grande replenishment · Upstream of Albuquerque municipal intake · Benefits entire Rio Grande basin downstream through NM, TX, and Mexico · Elephant Butte and Caballo reservoir system augmentation · US-Mexico 1944 Water Treaty compliance support'},
+  // Phase 7: Albuquerque → I-40 east → Texas Panhandle → Lake Meredith
+  {id:'p7a', n:'Santa Rosa NM — I-40 Eastern Corridor',  lat:34.94, lon:-104.68, phase:7, detail:'Eastern New Mexico · I-40 corridor continues east · Pecos River watershed approach · High Plains transition zone · Ogallala Aquifer recharge region begins'},
+  {id:'p7b', n:'Tucumcari NM — High Plains Entry',       lat:35.17, lon:-103.72, phase:7, detail:'New Mexico-Texas border approach · Canadian River watershed · High Plains Aquifer system · Ogallala recharge potential · Agricultural water relief for eastern NM and Texas Panhandle'},
+  {id:'p7c', n:'Amarillo TX — Texas Panhandle Hub',      lat:35.22, lon:-101.83, phase:7, detail:'Texas Panhandle · Major agricultural and energy hub · Ogallala Aquifer critically depleted in this region · Cattle ranching and grain production water security · Oklahoma Panhandle indirect benefit · Canadian River Municipal Water Authority jurisdiction'},
+  {id:'p7d', n:'Lake Meredith TX — Phase 7 Terminus',   lat:35.61, lon:-101.68, phase:7, detail:'Final terminus · Canadian River · Bureau of Reclamation facility · Serves Amarillo and 11 surrounding Texas Panhandle cities · Ogallala Aquifer supplementation · Canadian River flows into Oklahoma → Arkansas River system → Mississippi River · Brings Texas and Oklahoma into the 24-state watershed benefit zone · Completes the North American Aqueduct — exactly half the Lower 48 states'},
+  // Phase 8: Great Salt Lake → Echo Canyon → I-80 East → Hwy 189 → Fontenelle Reservoir WY
+  {id:'p8a', n:'Echo Canyon UT — I-80 Entry',           lat:41.02, lon:-111.44, phase:8, detail:'Eastern Utah · Echo Canyon · Weber River drainage · I-80 corridor east · Historic overland trail route · Natural eastern gateway from Wasatch Front into Wyoming basin'},
+  {id:'p8b', n:'Evanston WY — Wyoming Border',          lat:41.27, lon:-110.96, phase:8, detail:'Southwestern Wyoming · Bear River headwaters adjacent · I-80 corridor · Entry into Upper Green River basin · Wyoming water law jurisdiction begins · Prior appropriation doctrine in force'},
+  {id:'p8e', n:'Fontenelle Reservoir WY — Phase 8 Terminus', lat:42.03, lon:-110.06, phase:8, detail:'Phase 8 terminus · Green River · Bureau of Reclamation Fontenelle Dam · Upper Colorado River basin augmentation · Green River flows south into Flaming Gorge → Lake Powell → Lake Mead · Closes the loop — water injected here reaches Phase 1 terminus downstream · Upper basin compact states benefit directly · Wyoming and Colorado primary beneficiaries'},
+];
+
+const PIPE_SEGMENTS = [
+  ['p1a','p1b',1],['p1b','p1c',1],['p1c','p1d',1],['p1c','p1e',1],
+  ['p1e','p1f',1],['p1f','p1g',1],['p1g','p1h',1],
+  ['p1h','p2a',2],['p2a','p2b',2],['p2b','p2c',2],['p2c','p2d',2],
+  ['p2d','p3a',3],['p3a','p3b',3],['p3b','p3c',3],['p3c','p3d',3],
+  ['p3b','p4a',4],['p4a','p4b',4],['p4b','p4c',4],
+  // Phase 5: Canadian extension
+  ['p4c','p5a',5],['p5a','p5b',5],['p5b','p5c',5],
+  // Phase 6: Rio Grande spur branches from Phase 1 near Parker Dam/Needles
+  ['p1g','p6a',6],['p6a','p6b',6],['p6b','p6c',6],['p6c','p6d',6],['p6d','p6e',6],['p6e','p6f',6],
+  // Phase 7: branches from Albuquerque east along I-40 to Lake Meredith TX
+  ['p6e','p7a',7],['p7a','p7b',7],['p7b','p7c',7],['p7c','p7d',7],
+  // Phase 8: Great Salt Lake → Echo Canyon → I-80 → Hwy 189 → Fontenelle Reservoir WY
+  ['p2d','p8a',8],['p8a','p8b',8],['p8b','p8e',8],
+];
+
+function togglePipeline(){
+  pipelineVisible=!pipelineVisible;
+  document.getElementById('pipe-dot').style.opacity=pipelineVisible?'1':'0.3';
+  draw();
+}
+
+const SEVERITY_COLOR = {'Extreme':'#ff2020','Severe':'#ff6600','Moderate':'#ffaa00','Minor':'#ffdd00','Unknown':'#ff9900'};
+const CAT_COLOR = {5:'#ff00ff',4:'#ff4400',3:'#ff8800',2:'#ffcc00',1:'#ffff00',0:'#00ccff'};
+
+function quakeColor(m){return m>=7?'#ff0000':m>=6?'#ff4400':m>=5?'#ff8800':m>=4?'#ffcc00':m>=3?'#aacc00':'#44aa88';}
+function quakeRadius(m){return Math.max(4,Math.min(18,m*2.8));}
+function mineralColor(c){
+  const s=(c||'').toLowerCase();
+  if(s.indexOf('gold')>=0)     return '#d4a843';
+  if(s.indexOf('silver')>=0)   return '#c0c8d8';
+  if(s.indexOf('copper')>=0)   return '#b87333';
+  if(s.indexOf('zinc')>=0)     return '#7799aa';
+  if(s.indexOf('uranium')>=0)  return '#88cc44';
+  if(s.indexOf('platinum')>=0||s.indexOf('pgm')>=0) return '#a0b8d0';
+  if(s.indexOf('nickel')>=0)   return '#6699aa';
+  return '#9988bb';
+}
+
+// ── CURATED MAJOR WORLD MINES (static — no API required) ─────────────────────
+const MINE_DATA = [
+  // GOLD
+  {n:'Grasberg',lat:-4.05,lon:137.12,c:'Gold/Copper',op:'Freeport-McMoRan',co:'Indonesia'},
+  {n:'Muruntau',lat:41.51,lon:64.56,c:'Gold',op:'Navoi MMC',co:'Uzbekistan'},
+  {n:'NGM Goldstrike',lat:40.84,lon:-116.22,c:'Gold',op:'Barrick',co:'USA'},
+  {n:'NGM Cortez',lat:40.27,lon:-116.87,c:'Gold',op:'Barrick',co:'USA'},
+  {n:'NGM Carlin',lat:40.71,lon:-116.12,c:'Gold',op:'Barrick',co:'USA'},
+  {n:'NGM Turquoise Ridge',lat:41.88,lon:-117.55,c:'Gold',op:'Barrick',co:'USA'},
+  {n:'NGM Twin Creeks',lat:41.74,lon:-117.57,c:'Gold',op:'Barrick',co:'USA'},
+  {n:'Round Mountain',lat:38.70,lon:-117.07,c:'Gold',op:'Kinross',co:'USA'},
+  {n:'Fort Knox Mine',lat:64.57,lon:-147.31,c:'Gold',op:'Kinross',co:'USA'},
+  {n:'Pogo Mine',lat:63.18,lon:-143.02,c:'Gold',op:'Northern Star',co:'USA'},
+  {n:'Greens Creek',lat:57.43,lon:-134.78,c:'Silver/Gold/Zinc',op:'Hecla Mining',co:'USA'},
+  {n:'Stillwater Mine',lat:45.09,lon:-109.86,c:'Platinum/Palladium',op:'Sibanye-Stillwater',co:'USA'},
+  {n:'Bingham Canyon',lat:40.52,lon:-112.15,c:'Copper/Gold',op:'Rio Tinto',co:'USA'},
+  {n:'Cripple Creek',lat:38.76,lon:-105.18,c:'Gold',op:'Newmont',co:'USA'},
+  {n:'Lucky Friday',lat:47.47,lon:-116.06,c:'Silver',op:'Hecla Mining',co:'USA'},
+  {n:'Hycroft Mine',lat:40.97,lon:-118.59,c:'Gold/Silver',op:'Hycroft Mining',co:'USA'},
+  {n:'Canadian Malartic',lat:48.12,lon:-78.11,c:'Gold',op:'Agnico Eagle',co:'Canada'},
+  {n:'Detour Lake',lat:49.69,lon:-79.50,c:'Gold',op:'Agnico Eagle',co:'Canada'},
+  {n:'Meadowbank',lat:65.02,lon:-96.06,c:'Gold',op:'Agnico Eagle',co:'Canada'},
+  {n:'Macassa Mine',lat:48.14,lon:-80.02,c:'Gold',op:'Agnico Eagle',co:'Canada'},
+  {n:'Fosterville',lat:-36.87,lon:144.81,c:'Gold',op:'Agnico Eagle',co:'Australia'},
+  {n:'Red Dog Mine',lat:68.06,lon:-162.83,c:'Zinc/Silver',op:'Teck',co:'USA'},
+  {n:'Island Gold',lat:48.26,lon:-83.91,c:'Gold',op:'Alamos Gold',co:'Canada'},
+  {n:'Young-Davidson',lat:45.53,lon:-79.90,c:'Gold',op:'Alamos Gold',co:'Canada'},
+  {n:'Yanacocha',lat:-6.92,lon:-78.58,c:'Gold',op:'Newmont',co:'Peru'},
+  {n:'Ahafo Mine',lat:6.93,lon:-2.55,c:'Gold',op:'Newmont',co:'Ghana'},
+  {n:'Akyem Mine',lat:6.28,lon:-1.12,c:'Gold',op:'Newmont',co:'Ghana'},
+  {n:'Boddington',lat:-32.79,lon:116.37,c:'Gold/Copper',op:'Newmont',co:'Australia'},
+  {n:'Tanami Mine',lat:-19.97,lon:129.75,c:'Gold',op:'Newmont',co:'Australia'},
+  {n:'Cerro Negro',lat:-46.49,lon:-69.19,c:'Gold/Silver',op:'Newmont',co:'Argentina'},
+  {n:'Merian Mine',lat:4.72,lon:-54.82,c:'Gold',op:'Newmont',co:'Suriname'},
+  {n:'Penasquito',lat:24.90,lon:-101.38,c:'Gold/Silver/Zinc',op:'Newmont',co:'Mexico'},
+  {n:'Superpit KCGM',lat:-30.78,lon:121.56,c:'Gold',op:'Northern Star',co:'Australia'},
+  {n:'Lihir Mine',lat:-3.13,lon:152.64,c:'Gold',op:'Newcrest',co:'PNG'},
+  {n:'Cadia-Ridgeway',lat:-33.41,lon:149.00,c:'Gold/Copper',op:'Newcrest',co:'Australia'},
+  {n:'Telfer Mine',lat:-21.72,lon:122.10,c:'Gold/Copper',op:'Newcrest',co:'Australia'},
+  {n:'Obuasi Mine',lat:6.20,lon:-1.68,c:'Gold',op:'AngloGold Ashanti',co:'Ghana'},
+  {n:'Geita Mine',lat:-2.87,lon:32.22,c:'Gold',op:'AngloGold Ashanti',co:'Tanzania'},
+  {n:'Tropicana Mine',lat:-28.65,lon:124.00,c:'Gold',op:'AngloGold Ashanti',co:'Australia'},
+  {n:'Kibali Mine',lat:2.93,lon:29.56,c:'Gold',op:'Barrick/AngloGold',co:'DRC'},
+  {n:'Loulo-Gounkoto',lat:14.02,lon:-11.27,c:'Gold',op:'Barrick',co:'Mali'},
+  {n:'North Mara',lat:-1.52,lon:34.47,c:'Gold',op:'Barrick',co:'Tanzania'},
+  {n:'Veladero Mine',lat:-29.39,lon:-69.89,c:'Gold',op:'Barrick',co:'Argentina'},
+  {n:'Porgera Mine',lat:-5.48,lon:143.12,c:'Gold',op:'Barrick/Zijin',co:'PNG'},
+  {n:'Hishikari Mine',lat:31.92,lon:130.62,c:'Gold',op:'Sumitomo Metal Mining',co:'Japan'},
+  {n:'Kumtor Mine',lat:41.83,lon:78.23,c:'Gold',op:'Centerra Gold',co:'Kyrgyzstan'},
+  {n:'Olimpiada Mine',lat:59.12,lon:92.05,c:'Gold',op:'Polyus',co:'Russia'},
+  {n:'Oyu Tolgoi',lat:43.03,lon:106.85,c:'Copper/Gold',op:'Rio Tinto',co:'Mongolia'},
+  {n:'Paracatu Mine',lat:-17.22,lon:-46.88,c:'Gold',op:'Kinross',co:'Brazil'},
+  {n:'Kupol Mine',lat:67.33,lon:166.87,c:'Gold/Silver',op:'Kinross',co:'Russia'},
+  {n:'Fresnillo Mine',lat:23.17,lon:-102.87,c:'Silver/Gold',op:'Fresnillo PLC',co:'Mexico'},
+  {n:'Saucito Mine',lat:23.02,lon:-102.51,c:'Silver/Gold',op:'Fresnillo PLC',co:'Mexico'},
+  {n:'Herradura Mine',lat:29.07,lon:-111.68,c:'Gold',op:'Fresnillo PLC',co:'Mexico'},
+  {n:'Sunrise Dam',lat:-28.45,lon:122.57,c:'Gold',op:'AngloGold Ashanti',co:'Australia'},
+  {n:'Macraes Mine',lat:-45.44,lon:170.42,c:'Gold',op:'OceanaGold',co:'New Zealand'},
+  {n:'Waihi Mine',lat:-37.38,lon:175.83,c:'Gold/Silver',op:'OceanaGold',co:'New Zealand'},
+  // COPPER
+  {n:'Escondida',lat:-24.27,lon:-69.07,c:'Copper',op:'BHP',co:'Chile'},
+  {n:'Collahuasi',lat:-20.88,lon:-68.62,c:'Copper',op:'Glencore/Anglo American',co:'Chile'},
+  {n:'Morenci Mine',lat:33.05,lon:-109.35,c:'Copper',op:'Freeport-McMoRan',co:'USA'},
+  {n:'Bagdad Mine',lat:34.57,lon:-113.00,c:'Copper',op:'Freeport-McMoRan',co:'USA'},
+  {n:'Sierrita Mine',lat:31.90,lon:-111.12,c:'Copper',op:'Freeport-McMoRan',co:'USA'},
+  {n:'Cerro Verde',lat:-16.52,lon:-71.62,c:'Copper',op:'Freeport-McMoRan',co:'Peru'},
+  {n:'El Teniente',lat:-34.09,lon:-70.55,c:'Copper',op:'Codelco',co:'Chile'},
+  {n:'Chuquicamata',lat:-22.31,lon:-68.93,c:'Copper',op:'Codelco',co:'Chile'},
+  {n:'Radomiro Tomic',lat:-22.01,lon:-68.91,c:'Copper',op:'Codelco',co:'Chile'},
+  {n:'Antamina Mine',lat:-9.53,lon:-77.05,c:'Copper/Zinc',op:'BHP/Glencore/Teck',co:'Peru'},
+  {n:'Los Pelambres',lat:-31.82,lon:-70.70,c:'Copper',op:'Anglo American',co:'Chile'},
+  {n:'Quellaveco',lat:-17.12,lon:-70.88,c:'Copper',op:'Anglo American',co:'Peru'},
+  {n:'Kamoa-Kakula',lat:-10.73,lon:25.83,c:'Copper/Cobalt',op:'Ivanhoe Mines/Zijin',co:'DRC'},
+  {n:'Tenke Fungurume',lat:-10.60,lon:26.10,c:'Copper/Cobalt',op:'CMOC',co:'DRC'},
+  {n:'Kansanshi Mine',lat:-12.08,lon:26.00,c:'Copper/Gold',op:'First Quantum',co:'Zambia'},
+  {n:'Sentinel Mine',lat:-12.52,lon:25.91,c:'Copper',op:'First Quantum',co:'Zambia'},
+  {n:'Olympic Dam',lat:-30.44,lon:136.88,c:'Copper/Uranium',op:'BHP',co:'Australia'},
+  {n:'Prominent Hill',lat:-29.72,lon:135.53,c:'Copper/Gold',op:'OZ Minerals',co:'Australia'},
+  {n:'Mt Isa Mines',lat:-20.72,lon:139.50,c:'Copper/Zinc',op:'Glencore',co:'Australia'},
+  {n:'Aitik Mine',lat:67.08,lon:20.93,c:'Copper',op:'Boliden',co:'Sweden'},
+  {n:'Salobo Mine',lat:-5.98,lon:-50.97,c:'Copper/Gold',op:'Vale',co:'Brazil'},
+  {n:'Aktogay Mine',lat:46.64,lon:79.36,c:'Copper',op:'KAZ Minerals',co:'Kazakhstan'},
+  {n:'Highland Valley',lat:50.49,lon:-121.02,c:'Copper',op:'Teck',co:'Canada'},
+  {n:'Norilsk',lat:69.34,lon:88.19,c:'Nickel/Copper/Platinum',op:'Nornickel',co:'Russia'},
+  {n:'Pinto Valley',lat:33.51,lon:-110.78,c:'Copper',op:'Hudbay Minerals',co:'USA'},
+  {n:'Copper Mountain',lat:49.31,lon:-120.52,c:'Copper',op:'Hudbay Minerals',co:'Canada'},
+  // SILVER
+  {n:'Cannington Mine',lat:-22.46,lon:140.38,c:'Silver/Lead/Zinc',op:'South32',co:'Australia'},
+  {n:'San Cristobal',lat:-22.19,lon:-67.55,c:'Zinc/Silver',op:'Sumitomo',co:'Bolivia'},
+  {n:'Galena Mine',lat:47.46,lon:-116.18,c:'Silver/Lead',op:'Coeur Mining',co:'USA'},
+  {n:'Rochester Mine',lat:40.40,lon:-118.60,c:'Silver/Gold',op:'Coeur Mining',co:'USA'},
+  {n:'Palmarejo Mine',lat:26.92,lon:-107.78,c:'Silver/Gold',op:'Coeur Mining',co:'Mexico'},
+  // PLATINUM / PGM
+  {n:'Rustenburg Platinum',lat:-25.66,lon:27.24,c:'Platinum/PGM',op:'Anglo American Platinum',co:'South Africa'},
+  {n:'Mogalakwena',lat:-23.67,lon:28.74,c:'Platinum/PGM',op:'Anglo American Platinum',co:'South Africa'},
+  {n:'Impala Platinum',lat:-25.72,lon:27.19,c:'Platinum/PGM',op:'Implats',co:'South Africa'},
+  // URANIUM
+  {n:'Rossing Uranium',lat:-22.48,lon:15.01,c:'Uranium',op:'Rio Tinto',co:'Namibia'},
+  {n:'McArthur River',lat:57.77,lon:-105.57,c:'Uranium',op:'Cameco',co:'Canada'},
+  {n:'Cigar Lake',lat:57.97,lon:-104.99,c:'Uranium',op:'Cameco',co:'Canada'},
+  // NICKEL
+  {n:'Mt Keith Nickel',lat:-27.25,lon:120.54,c:'Nickel',op:'BHP',co:'Australia'},
+  {n:'Raglan Mine',lat:61.69,lon:-73.45,c:'Nickel/Copper',op:'Glencore',co:'Canada'},
+  {n:'Voiseys Bay',lat:56.38,lon:-61.48,c:'Nickel/Copper',op:'Vale',co:'Canada'},
+];
+
+(function initMinerals(){
+  const lbl=document.getElementById('mineral-label');
+  const cnt=document.getElementById('mineral-count');
+  if(!lbl||!cnt) return;
+  const cc={Gold:0,Copper:0,Silver:0,Platinum:0,Uranium:0,Nickel:0,Other:0};
+  MINE_DATA.forEach(function(m){
+    const c=(m.c||'').toLowerCase();
+    if(c.indexOf('gold')>=0) cc.Gold++;
+    else if(c.indexOf('copper')>=0) cc.Copper++;
+    else if(c.indexOf('silver')>=0) cc.Silver++;
+    else if(c.indexOf('platinum')>=0||c.indexOf('pgm')>=0) cc.Platinum++;
+    else if(c.indexOf('uranium')>=0) cc.Uranium++;
+    else if(c.indexOf('nickel')>=0) cc.Nickel++;
+    else cc.Other++;
+  });
+  lbl.textContent = MINE_DATA.length+' MINES LOADED';
+  cnt.innerHTML = Object.keys(cc).filter(function(k){return cc[k]>0;})
+    .map(function(k){return '<span style="color:'+mineralColor(k)+'">'+k+': '+cc[k]+'</span>';}).join('<br>');
+})();
+
+function toggleMinerals(){
+  mineralsVisible=!mineralsVisible;
+  document.getElementById('mineral-dot').style.opacity=mineralsVisible?'1':'0.3';
+  draw();
+}
+let activeTypes = new Set(Object.keys(CFG));
+
+const svg   = d3.select('#gs');
+const W = () => document.getElementById('gw').clientWidth;
+const H = () => document.getElementById('gw').clientHeight;
+
+// ═══════════════════════════════════════════════════════════
+//  SVG GRADIENTS
+// ═══════════════════════════════════════════════════════════
+const defs = svg.append('defs');
+
+// Globe interior — deep blue with lighter center
+defs.append('radialGradient').attr('id','gFill')
+  .attr('cx','38%').attr('cy','35%')
+  .html(`<stop offset="0%"   stop-color="#1a3a60"/>
+         <stop offset="50%"  stop-color="#0e2240"/>
+         <stop offset="100%" stop-color="#060e20"/>`);
+
+// Atmosphere halo — glowing cyan-blue ring
+defs.append('radialGradient').attr('id','gAtmo')
+  .attr('cx','50%').attr('cy','50%')
+  .html(`<stop offset="78%"  stop-color="rgba(80,180,255,0)"    stop-opacity="0"/>
+         <stop offset="92%"  stop-color="rgba(80,180,255,0.45)" stop-opacity="1"/>
+         <stop offset="100%" stop-color="rgba(40,120,220,0)"    stop-opacity="0"/>`);
+
+// Specular highlight
+defs.append('radialGradient').attr('id','gGlint')
+  .attr('cx','33%').attr('cy','28%')
+  .html(`<stop offset="0%"   stop-color="rgba(180,230,255,0.18)"/>
+         <stop offset="60%"  stop-color="rgba(100,180,255,0.04)"/>
+         <stop offset="100%" stop-color="rgba(80,160,255,0)"/>`);
+
+// SVG layer order
+const gSphere  = svg.append('path');
+const gGlint   = svg.append('path');
+const gLand    = svg.append('g');
+const gSub     = svg.append('g');
+const gGrat    = svg.append('path');
+const gBorders = svg.append('path');
+const gAtmo    = svg.append('path');
+const gRim     = svg.append('path');
+const gCone    = svg.append('g');  // hurricane cones
+const gPipe    = svg.append('g');  // The North American Aqueduct water pipeline network
+const gMn      = svg.append('g');  // mine markers (isolated layer)
+const gMk      = svg.append('g');  // network nodes + quakes + alerts + storms
+
+function getProj() {
+  return d3.geoOrthographic()
+    .scale(sc)
+    .translate([W() / 2, H() / 2])
+    .rotate(rot)
+    .clipAngle(90);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DRAW
+// ═══════════════════════════════════════════════════════════
+function draw() {
+  const w = W(), h = H();
+  svg.attr('width', w).attr('height', h);
+
+  const p   = getProj();
+  const ph  = d3.geoPath().projection(p);
+  const ctr = p.invert([w / 2, h / 2]);
+
+  // Sphere fill
+  gSphere.attr('d', ph({type:'Sphere'}))
+    .attr('fill', 'url(#gFill)')
+    .attr('stroke', 'none');
+
+  // Specular glint
+  gGlint.attr('d', ph({type:'Sphere'}))
+    .attr('fill', 'url(#gGlint)')
+    .attr('stroke', 'none');
+
+  // Country polygons — flat translucent blue-teal
+  if (world) {
+    gLand.selectAll('path')
+      .data(topojson.feature(world, world.objects.countries).features)
+      .join('path')
+      .attr('d', ph)
+      .attr('fill', '#1a3a5c')
+      .attr('stroke', 'none');
+
+    // Country border mesh — bright cyan lines, the defining visual
+    const mesh = topojson.mesh(world, world.objects.countries, (a, b) => a !== b);
+    gBorders.attr('d', ph(mesh))
+      .attr('fill', 'none')
+      .attr('stroke', '#3a8acc')
+      .attr('stroke-width', 0.55)
+      .attr('stroke-opacity', 0.7);
+  }
+
+  // US states + Canadian provinces + Australian states
+  if (subData) {
+    gSub.selectAll('path')
+      .data(subData.features)
+      .join('path')
+      .attr('d', ph)
+      .attr('fill', 'none')
+      .attr('stroke', 'rgba(100,180,255,0.28)')
+      .attr('stroke-width', 0.45);
+  }
+
+  // Graticule — very subtle grid
+  gGrat.attr('d', ph(d3.geoGraticule()()))
+    .attr('fill', 'none')
+    .attr('stroke', 'rgba(60,140,220,0.18)')
+    .attr('stroke-width', 0.3);
+
+  // Atmosphere
+  gAtmo.attr('d', ph({type:'Sphere'}))
+    .attr('fill', 'url(#gAtmo)')
+    .attr('stroke', 'none');
+
+  // Rim
+  gRim.attr('d', ph({type:'Sphere'}))
+    .attr('fill', 'none')
+    .attr('stroke', 'rgba(80,180,255,0.55)')
+    .attr('stroke-width', 1.4);
+
+  // ── Hurricane cones ─────────────────────────────────────────────────────────
+  const coneData = (typeof stormsVisible!=='undefined' && stormsVisible && storms.length)
+    ? storms.filter(s=>s.type==='cone').map(s=>s.cone).filter(Boolean) : [];
+  gCone.selectAll('path').data(coneData).join('path')
+    .attr('d',d=>ph({type:d.type,coordinates:d.coordinates}))
+    .attr('fill','rgba(255,60,160,0.10)').attr('stroke','rgba(255,60,160,0.32)')
+    .attr('stroke-width',0.8).attr('stroke-dasharray','4,3');
+
+  // ── Mine diamonds (gMn — own isolated layer) ─────────────────────────────
+  gMn.selectAll('.mnmk').data(mineralsVisible?MINE_DATA:[], d=>d.n).join(
+    enter => { const g=enter.append('g').attr('class','mnmk'); g.append('path').attr('class','mdiamond'); return g; }
+  ).each(function(d){
+    const xy=p([d.lon,d.lat]), front=d3.geoDistance([d.lon,d.lat],ctr)<Math.PI/2;
+    d3.select(this)
+      .attr('transform', xy?`translate(${xy[0]},${xy[1]})`:'translate(-9999,-9999)')
+      .attr('opacity', front?0.82:0).attr('pointer-events', front?'all':'none');
+    d3.select(this).select('.mdiamond')
+      .attr('d','M0,-5 L5,0 L0,5 L-5,0 Z')
+      .attr('fill',mineralColor(d.c)).attr('fill-opacity',0.75)
+      .attr('stroke','rgba(255,255,255,0.4)').attr('stroke-width',0.8);
+  })
+  .on('mouseenter',function(ev,d){
+    clearTimeout(window._ttHide);
+    d3.select(this).select('.mdiamond').attr('d','M0,-8 L8,0 L0,8 L-8,0 Z');
+    showTT(ev,'◆ '+d.n,'PRODUCER · '+d.c,'Operator: '+d.op+' · '+d.co,
+      Math.abs(d.lat).toFixed(2)+'°'+(d.lat>=0?'N':'S')+' '+Math.abs(d.lon).toFixed(2)+'°'+(d.lon<0?'W':'E'),
+      mineralColor(d.c),'');
+  })
+  .on('mousemove',moveTT)
+  .on('mouseleave',function(){
+    d3.select(this).select('.mdiamond').attr('d','M0,-5 L5,0 L0,5 L-5,0 Z');
+    delayHideTT(320);
+  });
+
+  // ── The North American Aqueduct Water Pipeline Network (gPipe) ───────────────────────────────────────
+  if (pipelineVisible) {
+    // Build node lookup
+    const pnMap = {};
+    PIPE_NODES.forEach(n => { pnMap[n.id] = n; });
+
+    // Draw dashed segment lines
+    gPipe.selectAll('.pseg').data(PIPE_SEGMENTS, d=>d[0]+d[1]).join(
+      enter => enter.append('line').attr('class','pseg')
+    ).each(function(seg) {
+      const a = pnMap[seg[0]], b = pnMap[seg[1]];
+      const ph = PIPE_PHASES[seg[2]];
+      if (!a || !b) { d3.select(this).attr('opacity',0); return; }
+      const xya = p([a.lon, a.lat]), xyb = p([b.lon, b.lat]);
+      const frontA = d3.geoDistance([a.lon,a.lat], ctr) < Math.PI/2;
+      const frontB = d3.geoDistance([b.lon,b.lat], ctr) < Math.PI/2;
+      d3.select(this)
+        .attr('x1', xya ? xya[0] : -9999).attr('y1', xya ? xya[1] : -9999)
+        .attr('x2', xyb ? xyb[0] : -9999).attr('y2', xyb ? xyb[1] : -9999)
+        .attr('stroke', ph.color)
+        .attr('stroke-width', 1.8)
+        .attr('stroke-dasharray', ph.dash)
+        .attr('opacity', (frontA && frontB) ? 0.75 : 0);
+    });
+
+    // Draw pipeline node markers
+    gPipe.selectAll('.pnmk').data(PIPE_NODES, d=>d.id).join(
+      enter => {
+        const g = enter.append('g').attr('class','pnmk').style('cursor','pointer');
+        g.append('circle').attr('class','pndot');
+        return g;
+      }
+    ).each(function(d) {
+      const xy = p([d.lon, d.lat]);
+      const front = d3.geoDistance([d.lon,d.lat], ctr) < Math.PI/2;
+      const ph = PIPE_PHASES[d.phase];
+      d3.select(this)
+        .attr('transform', xy ? `translate(${xy[0]},${xy[1]})` : 'translate(-9999,-9999)')
+        .attr('opacity', front ? 1 : 0)
+        .attr('pointer-events', front ? 'all' : 'none');
+      d3.select(this).select('.pndot')
+        .attr('r', 3.5)
+        .attr('fill', ph.color)
+        .attr('fill-opacity', 0.85)
+        .attr('stroke', 'rgba(255,255,255,0.5)')
+        .attr('stroke-width', 0.8);
+    })
+    .on('mouseenter', function(ev, d) {
+      clearTimeout(window._ttHide);
+      const ph = PIPE_PHASES[d.phase];
+      d3.select(this).select('.pndot').attr('r', 6);
+      showTT(ev,
+        '◉ ' + d.n,
+        'CANVAZ PHASE ' + d.phase + ' · ' + ['','CA→NV Primary','→ Utah/GSL','→ Idaho/Snake','→ Montana/Missouri','→ Alberta/Saskatchewan','→ Rio Grande Spur','→ Texas Panhandle/Lake Meredith','→ Wyoming/Upper Colorado'][d.phase],
+        d.detail,
+        Math.abs(d.lat).toFixed(2)+'°'+(d.lat>=0?'N':'S')+' '+Math.abs(d.lon).toFixed(2)+'°'+(d.lon<0?'W':'E'),
+        ph.color, '');
+    })
+    .on('mousemove', moveTT)
+    .on('mouseleave', function() {
+      d3.select(this).select('.pndot').attr('r', 3.5);
+      delayHideTT(320);
+    });
+  } else {
+    gPipe.selectAll('.pseg').remove();
+    gPipe.selectAll('.pnmk').remove();
+  }
+
+  // ── Earthquake circles ────────────────────────────────────────────────────
+  // KEY FIX: class is 'quakemk' only — no '.mk' secondary class
+  gMk.selectAll('.quakemk').data((typeof quakesVisible!=='undefined'&&quakesVisible)?quakes:[], d=>d.id).join(
+    enter => {
+      const g=enter.append('g').attr('class','quakemk');
+      g.append('circle').attr('class','qpr').attr('fill','none').attr('stroke-width',1.5).attr('opacity',0.55);
+      g.append('circle').attr('class','qdot');
+      return g;
+    }
+  ).each(function(d){
+    const xy=p([d.lon,d.lat]), front=d3.geoDistance([d.lon,d.lat],ctr)<Math.PI/2, r=quakeRadius(d.mag);
+    d3.select(this)
+      .attr('transform', xy?`translate(${xy[0]},${xy[1]})`:'translate(-9999,-9999)')
+      .attr('opacity', front?0.85:0).attr('pointer-events', front?'all':'none');
+    d3.select(this).select('.qpr').attr('r',r+6).attr('stroke',d.color);
+    d3.select(this).select('.qdot').attr('r',r).attr('fill',d.color).attr('fill-opacity',0.55)
+      .attr('stroke','rgba(255,255,255,0.45)').attr('stroke-width',1);
+  })
+  .on('mouseenter',function(ev,d){
+    clearTimeout(window._ttHide);
+    d3.select(this).select('.qdot').attr('r',quakeRadius(d.mag)+3);
+    showTT(ev,`M${d.mag.toFixed(1)} EARTHQUAKE`,d.status,d.detail,
+      `Depth: ${d.depth} km · ${Math.abs(d.lat).toFixed(2)}°${d.lat>=0?'N':'S'} ${Math.abs(d.lon).toFixed(2)}°${d.lon<0?'W':'E'}`,
+      d.color,'');
+  })
+  .on('mousemove',moveTT)
+  .on('mouseleave',function(_,d){d3.select(this).select('.qdot').attr('r',quakeRadius(d.mag));delayHideTT(320);});
+
+  // ── Weather alert rings ───────────────────────────────────────────────────
+  // KEY FIX: class is 'alertmk' only — no '.mk' secondary class
+  gMk.selectAll('.alertmk').data((typeof alertsVisible!=='undefined'&&alertsVisible)?alerts:[], d=>d.id).join(
+    enter => {
+      const g=enter.append('g').attr('class','alertmk');
+      g.append('circle').attr('class','apr').attr('fill','none').attr('stroke-width',2).attr('opacity',0.6);
+      g.append('circle').attr('class','adot');
+      return g;
+    }
+  ).each(function(d){
+    const xy=p([d.lon,d.lat]), front=d3.geoDistance([d.lon,d.lat],ctr)<Math.PI/2;
+    d3.select(this)
+      .attr('transform', xy?`translate(${xy[0]},${xy[1]})`:'translate(-9999,-9999)')
+      .attr('opacity', front?1:0).attr('pointer-events', front?'all':'none');
+    d3.select(this).select('.apr').attr('r',13).attr('stroke',d.color);
+    d3.select(this).select('.adot').attr('r',5.5).attr('fill',d.color)
+      .attr('stroke','rgba(255,255,255,0.5)').attr('stroke-width',1.5);
+  })
+  .on('mouseenter',function(ev,d){
+    clearTimeout(window._ttHide);
+    d3.select(this).select('.adot').attr('r',8);
+    showTT(ev,'⚠ '+d.name,d.status,d.detail,'Expires: '+d.expires,d.color,'');
+  })
+  .on('mousemove',moveTT)
+  .on('mouseleave',function(){d3.select(this).select('.adot').attr('r',5.5);delayHideTT(320);});
+
+  // ── Hurricane track points ────────────────────────────────────────────────
+  // KEY FIX: class is 'stormmk' only — no '.mk' secondary class
+  const sVis = (typeof stormsVisible!=='undefined'&&stormsVisible)?storms.filter(s=>s.type==='trackpt'):[];
+  gMk.selectAll('.stormmk').data(sVis, d=>d.id).join(
+    enter => {
+      const g=enter.append('g').attr('class','stormmk');
+      g.append('circle').attr('class','spr').attr('fill','none').attr('stroke-width',1.5).attr('opacity',0.5);
+      g.append('circle').attr('class','sdot');
+      g.append('text').attr('class','stlabel').attr('text-anchor','middle').attr('dy',-10)
+        .attr('fill','#fff').attr('font-size','7px').attr('font-family','Courier New,monospace').attr('pointer-events','none');
+      return g;
+    }
+  ).each(function(d){
+    const xy=p([d.lon,d.lat]), front=d3.geoDistance([d.lon,d.lat],ctr)<Math.PI/2, r=d.isCurrent?9:6;
+    d3.select(this)
+      .attr('transform', xy?`translate(${xy[0]},${xy[1]})`:'translate(-9999,-9999)')
+      .attr('opacity', front?(d.opacity||1):0).attr('pointer-events', front?'all':'none');
+    d3.select(this).select('.spr').attr('r',r+5).attr('stroke',d.color);
+    d3.select(this).select('.sdot').attr('r',r).attr('fill',d.color)
+      .attr('stroke','rgba(255,255,255,0.6)').attr('stroke-width',d.isCurrent?2:1);
+    d3.select(this).select('.stlabel').text(d.isCurrent?d.stormName:d.label);
+  })
+  .on('mouseenter',function(ev,d){
+    clearTimeout(window._ttHide);
+    d3.select(this).select('.sdot').attr('r',d.isCurrent?12:9);
+    showTT(ev,(d.isCurrent?'🌀 ':'')+d.stormName,d.status,d.detail,
+      `${d.label} · ${Math.abs(d.lat).toFixed(1)}°${d.lat>=0?'N':'S'} ${Math.abs(d.lon).toFixed(1)}°${d.lon<0?'W':'E'}`,
+      d.color,'');
+  })
+  .on('mousemove',moveTT)
+  .on('mouseleave',function(_,d){d3.select(this).select('.sdot').attr('r',d.isCurrent?9:6);delayHideTT(320);});
+
+  // ── Network nodes — original .mk selector, unchanged ─────────────────────
+  const vis = LOCS.filter(l => activeTypes.has(l.type));
+  document.getElementById('sn').textContent = vis.length;
+  document.getElementById('ss').textContent = `OF ${LOCS.length} NODES SHOWN`;
+
+  gMk.selectAll('.mk').data(vis, d => d.id).join(
+    enter => {
+      const g = enter.append('g').attr('class', 'mk');
+      g.append('circle').attr('class', 'pr').attr('fill', 'none').attr('stroke-width', 1.5).attr('opacity', 0.45);
+      g.append('circle').attr('class', 'dot');
+      return g;
+    }
+  ).each(function(d) {
+    const xy    = p([d.lon, d.lat]);
+    const cfg   = CFG[d.type];
+    const front = d3.geoDistance([d.lon, d.lat], ctr) < Math.PI / 2;
+    d3.select(this)
+      .attr('transform', xy ? `translate(${xy[0]},${xy[1]})` : 'translate(-9999,-9999)')
+      .attr('opacity', front ? 1 : 0)
+      .attr('pointer-events', front ? 'all' : 'none');
+    d3.select(this).select('.pr')
+      .attr('r', cfg.r + 5).attr('stroke', cfg.color)
+      .attr('stroke-dasharray', cfg.dashed ? '3,2' : null);
+    d3.select(this).select('.dot')
+      .attr('r', cfg.r).attr('fill', cfg.color)
+      .attr('stroke', cfg.dashed ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.22)')
+      .attr('stroke-width', cfg.dashed ? 1.5 : 1)
+      .attr('stroke-dasharray', cfg.dashed ? '3,2' : null);
+  })
+  .on('mouseenter', function(ev, d) {
+    clearTimeout(window._ttHide);
+    const cfg = CFG[d.type];
+    d3.select(this).select('.dot').attr('r', cfg.r + 3);
+    showTT(ev, d.name, d.status, d.detail,
+      `${Math.abs(d.lat).toFixed(2)}°${d.lat>=0?'N':'S'}  ${Math.abs(d.lon).toFixed(2)}°${d.lon<0?'W':'E'}`,
+      cfg.color,
+      `<a href="OreHaven_Map.html?lat=${d.lat}&lng=${d.lon}&zoom=13" target="_blank">VIEW IN MAP →</a>`);
+  })
+  .on('mousemove', moveTT)
+  .on('mouseleave', function(_, d) {
+    d3.select(this).select('.dot').attr('r', CFG[d.type].r);
+    delayHideTT(320);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════════════════
+fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+  .then(r => r.json())
+  .then(data => { world = data; draw(); });
+
+// US states, Canadian provinces, Australian states
+// Subdivisions: three separate fetches — US states, CA provinces, AU states
+const subFeatures = [];
+Promise.allSettled([
+  fetch('https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@v5.1.2/geojson/ne_110m_admin_1_states_provinces.geojson')
+    .then(r => r.json())
+    .then(d => subFeatures.push(...d.features.filter(f => f.geometry))),
+  fetch('https://cdn.jsdelivr.net/gh/codeforamerica/click_that_hood@master/public/data/canada.geojson')
+    .then(r => r.json())
+    .then(d => subFeatures.push(...d.features.filter(f => f.geometry))),
+  fetch('https://cdn.jsdelivr.net/gh/codeforamerica/click_that_hood@master/public/data/australia.geojson')
+    .then(r => r.json())
+    .then(d => subFeatures.push(...d.features.filter(f => f.geometry))),
+]).then(() => {
+  subData = { type:'FeatureCollection', features: subFeatures };
+  draw();
+});
+
+// ── Tooltip helpers ───────────────────────────────────────────────────────────
+function showTT(ev,name,status,detail,coord,color,linkHTML){
+  const wr=document.getElementById('gw').getBoundingClientRect(),tt=document.getElementById('tt');
+  tt.style.display='block';
+  tt.style.left=Math.min(ev.clientX-wr.left+14,W()-292)+'px';
+  tt.style.top =Math.max(ev.clientY-wr.top-10,6)+'px';
+  tt.style.borderColor=color+'99';
+  document.getElementById('tt-n').style.color=color;
+  document.getElementById('tt-n').textContent=name;
+  document.getElementById('tt-s').textContent=status.toUpperCase();
+  document.getElementById('tt-d').textContent=detail;
+  document.getElementById('tt-c').textContent=coord;
+  document.getElementById('tt-link').innerHTML=linkHTML;
+}
+function moveTT(ev){
+  const wr=document.getElementById('gw').getBoundingClientRect(),tt=document.getElementById('tt');
+  tt.style.left=Math.min(ev.clientX-wr.left+14,W()-292)+'px';
+  tt.style.top =Math.max(ev.clientY-wr.top-10,6)+'px';
+}
+function delayHideTT(ms){
+  window._ttHide=setTimeout(()=>{document.getElementById('tt').style.display='none';},ms);
+}
+
+// ── NOAA Weather Alerts ───────────────────────────────────────────────────────
+let alertsVisible=true;
+function toggleAlerts(){alertsVisible=!alertsVisible;document.getElementById('alert-dot').style.opacity=alertsVisible?'1':'0.3';draw();}
+function loadAlerts(){
+  fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert')
+    .then(r=>r.json()).then(data=>{
+      const seen=new Set();alerts=[];
+      (data.features||[]).forEach(f=>{
+        const pr=f.properties,sev=pr.severity||'Unknown';
+        if(sev==='Minor'&&(pr.event||'').toLowerCase().includes('advisory'))return;
+        let lat=null,lon=null;
+        if(f.geometry){
+          if(f.geometry.type==='Point'){[lon,lat]=f.geometry.coordinates;}
+          else if(f.geometry.type==='Polygon'){const c=f.geometry.coordinates[0];lon=c.reduce((s,q)=>s+q[0],0)/c.length;lat=c.reduce((s,q)=>s+q[1],0)/c.length;}
+          else if(f.geometry.type==='MultiPolygon'){const c=f.geometry.coordinates[0][0];lon=c.reduce((s,q)=>s+q[0],0)/c.length;lat=c.reduce((s,q)=>s+q[1],0)/c.length;}
+        }
+        if(!lat||!lon)return;
+        const key=`${pr.event}|${Math.round(lat)}|${Math.round(lon)}`;
+        if(seen.has(key))return;seen.add(key);
+        alerts.push({id:'al'+alerts.length,name:pr.event||'Alert',lat,lon,type:'alert',
+          severity:sev,status:`${sev} · ${pr.event}`,
+          detail:pr.headline||(pr.description||'').slice(0,280)||'No details.',
+          color:SEVERITY_COLOR[sev]||'#ff9900',
+          expires:pr.expires?new Date(pr.expires).toLocaleString():'Unknown'});
+      });
+      const lbl=document.getElementById('alert-label'),cnt=document.getElementById('alert-count');
+      if(!alerts.length){lbl.textContent='NO ACTIVE ALERTS';cnt.innerHTML='';}
+      else{
+        lbl.textContent=`${alerts.length} ACTIVE ALERT${alerts.length>1?'S':''}`;
+        const sc={};alerts.forEach(a=>{sc[a.severity]=(sc[a.severity]||0)+1;});
+        cnt.innerHTML=Object.entries(sc).map(([s,n])=>`<span style="color:${SEVERITY_COLOR[s]||'#ff9900'}">${s}: ${n}</span>`).join('<br>');
+      }
+      draw();
+    }).catch(()=>{document.getElementById('alert-label').textContent='UNAVAILABLE';});
+}
+loadAlerts();setInterval(loadAlerts,5*60*1000);
+
+// ── NHC Hurricane Tracks ──────────────────────────────────────────────────────
+let stormsVisible=true;
+function toggleStorms(){stormsVisible=!stormsVisible;document.getElementById('storm-dot').style.opacity=stormsVisible?'1':'0.3';draw();}
+function loadStorms(){
+  fetch('https://www.nhc.noaa.gov/CurrentStorms.json')
+    .then(r=>r.json()).then(data=>{
+      const active=data.activeStorms||[];
+      if(!active.length){storms=[];document.getElementById('storm-label').textContent='NO ACTIVE STORMS';document.getElementById('storm-count').innerHTML='';draw();return;}
+      Promise.all(active.map(s=>Promise.allSettled([
+        fetch(`https://www.nhc.noaa.gov/storm_graphics/api/${s.id}_best_track.geojson`).then(r=>r.json()),
+        fetch(`https://www.nhc.noaa.gov/storm_graphics/api/${s.id}_5day_pgn.geojson`).then(r=>r.json()),
+      ]).then(([tr,cr])=>({id:s.id,name:s.name,tr,cr})))).then(results=>{
+        storms=[];const names=[];
+        results.forEach(({id,name,tr,cr})=>{
+          names.push(name);
+          if(tr.status==='fulfilled'&&tr.value.features){
+            tr.value.features.filter(f=>f.geometry?.type==='Point'&&(f.properties?.type==='FORECAST'||f.properties?.type==='POSITION'))
+            .forEach((f,i)=>{
+              const[lon,lat]=f.geometry.coordinates,props=f.properties||{};
+              const ws=parseInt(props.maxWindSpeed||props.wind||0);
+              const cat=ws>=157?5:ws>=130?4:ws>=111?3:ws>=96?2:ws>=74?1:0;
+              storms.push({id:`${id}_pt${i}`,type:'trackpt',lat,lon,stormName:name,isCurrent:i===0,
+                label:i===0?'NOW':`+${props.tau||(i*12)}hr`,status:`${name} · ${i===0?'CURRENT':'FORECAST'}`,
+                detail:`Wind: ${ws||'?'} kt · ${cat===0?'TD/TS':'CAT '+cat}`,
+                color:CAT_COLOR[cat]||'#ff8800',opacity:Math.max(0.3,1-i*0.12)});
+            });
+          }
+          if(cr.status==='fulfilled'&&cr.value.features?.length){
+            const cf=cr.value.features.find(f=>f.geometry?.type==='Polygon'||f.geometry?.type==='MultiPolygon');
+            if(cf)storms.push({id:`${id}_cone`,type:'cone',cone:cf.geometry,stormName:name});
+          }
+        });
+        document.getElementById('storm-label').textContent=`${names.length} ACTIVE STORM${names.length>1?'S':''}`;
+        document.getElementById('storm-count').innerHTML=names.map(n=>`<span style="color:#ff88cc">${n}</span>`).join('<br>');
+        draw();
+      });
+    }).catch(()=>{
+      document.getElementById('storm-label').textContent='NO ACTIVE STORMS';
+      document.getElementById('storm-count').innerHTML='<span style="font-size:8px;color:#443344">Activates during hurricane season</span>';
+    });
+}
+loadStorms();setInterval(loadStorms,30*60*1000);
+
+// ── USGS Earthquakes ──────────────────────────────────────────────────────────
+let quakesVisible=true;
+function toggleQuakes(){quakesVisible=!quakesVisible;document.getElementById('quake-dot').style.opacity=quakesVisible?'1':'0.3';draw();}
+function loadQuakes(){
+  fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson')
+    .then(r=>r.json()).then(data=>{
+      quakes=(data.features||[]).map((f,i)=>{
+        const[lon,lat,depth]=f.geometry.coordinates,mag=f.properties.mag||0;
+        const place=f.properties.place||'Unknown',time=new Date(f.properties.time).toLocaleString();
+        const lbl=mag>=7?'MAJOR':mag>=6?'STRONG':mag>=5?'MODERATE':mag>=4?'LIGHT':mag>=3?'MINOR':'MICRO';
+        return{id:'qk'+i,lat,lon,mag:parseFloat(mag.toFixed(1)),depth:parseFloat((depth||0).toFixed(1)),
+          color:quakeColor(mag),status:`M${mag.toFixed(1)} ${lbl} · ${place}`,detail:`${place} · ${time}`};
+      });
+      const lbl=document.getElementById('quake-label'),cnt=document.getElementById('quake-count');
+      lbl.textContent=`${quakes.length} QUAKES (24H)`;
+      const br={'M7+':0,'M6':0,'M5':0,'M4':0,'M3':0,'M2.5':0};
+      quakes.forEach(q=>{if(q.mag>=7)br['M7+']++;else if(q.mag>=6)br['M6']++;else if(q.mag>=5)br['M5']++;else if(q.mag>=4)br['M4']++;else if(q.mag>=3)br['M3']++;else br['M2.5']++;});
+      cnt.innerHTML=Object.entries(br).filter(([,n])=>n>0).map(([b,n])=>`<span style="color:${quakeColor(parseFloat(b.replace('M','').replace('+','')))||'#cc8800'}">${b}: ${n}</span>`).join('<br>');
+      draw();
+    }).catch(()=>{document.getElementById('quake-label').textContent='UNAVAILABLE';});
+}
+loadQuakes();setInterval(loadQuakes,15*60*1000);
+
+// ═══════════════════════════════════════════════════════════
+//  INTERACTION
+// ═══════════════════════════════════════════════════════════
+const gsEl = document.getElementById('gs');
+
+gsEl.addEventListener('mousedown', e => { drag = true; lastXY = [e.clientX, e.clientY]; });
+window.addEventListener('mousemove', e => {
+  if (!drag || !lastXY) return;
+  const dx = e.clientX - lastXY[0], dy = e.clientY - lastXY[1];
+  lastXY = [e.clientX, e.clientY];
+  rot = [rot[0] + dx * 0.32, Math.max(-90, Math.min(90, rot[1] - dy * 0.32)), 0];
+  draw();
+});
+window.addEventListener('mouseup', () => { drag = false; lastXY = null; });
+
+gsEl.addEventListener('wheel', e => {
+  e.preventDefault();
+  sc = Math.max(120, Math.min(1000, sc - e.deltaY * 0.5));
+  draw();
+}, { passive: false });
+
+gsEl.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) lastXY = [e.touches[0].clientX, e.touches[0].clientY];
+}, { passive: true });
+gsEl.addEventListener('touchmove', e => {
+  if (e.touches.length !== 1 || !lastXY) return;
+  e.preventDefault();
+  const dx = e.touches[0].clientX - lastXY[0], dy = e.touches[0].clientY - lastXY[1];
+  lastXY = [e.touches[0].clientX, e.touches[0].clientY];
+  rot = [rot[0] + dx * 0.32, Math.max(-90, Math.min(90, rot[1] - dy * 0.32)), 0];
+  draw();
+}, { passive: false });
+gsEl.addEventListener('touchend', () => { lastXY = null; });
+
+document.getElementById('resetB').addEventListener('click', () => {
+  rot = [-265, -35, 0]; sc = 280; draw();
+});
+window.addEventListener('resize', draw);
+
+// ── AUTO-ROTATION ─────────────────────────────────────────────────────────────
+let rotating = true;
+const ROT_SPEED = 0.20;
+
+setInterval(() => {
+  if (rotating && !drag) { rot[0] += ROT_SPEED; draw(); }
+}, 50); // 20fps
+
+const pauseB = document.getElementById('pauseB');
+pauseB.addEventListener('click', e => {
+  e.stopPropagation();
+  rotating = !rotating;
+  pauseB.textContent = rotating ? '⏸ PAUSE' : '▶ RESUME';
+  pauseB.classList.toggle('paused', !rotating);
+});
+
+// Click empty globe space to toggle rotation — node clicks unaffected
+gsEl.addEventListener('click', e => {
+  if (e.target.closest('.nodemk,.mnmk,.numk,.quakemk,.alertmk,.stormmk,.mk,.pnmk')) return;
+  rotating = !rotating;
+  pauseB.textContent = rotating ? '⏸ PAUSE' : '▶ RESUME';
+  pauseB.classList.toggle('paused', !rotating);
+});
+
+// ═══════════════════════════════════════════════════════════
+//  FILTER SIDEBAR
+// ═══════════════════════════════════════════════════════════
+const fc = document.createElement('div');
+fc.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+Object.entries(CFG).forEach(([type, cfg]) => {
+  const btn = document.createElement('button');
+  btn.className = 'fb';
+  btn.style.borderColor = cfg.color + '44';
+  const ds = cfg.dashed
+    ? `border:2px dashed ${cfg.color};background:transparent;border-radius:50%;`
+    : `background:${cfg.color};`;
+  btn.innerHTML = `<span class="dot" style="${ds}"></span>${cfg.label}`;
+  btn.addEventListener('click', () => {
+    activeTypes.has(type) ? activeTypes.delete(type) : activeTypes.add(type);
+    btn.classList.toggle('off', !activeTypes.has(type));
+    draw();
+  });
+  fc.appendChild(btn);
+});
+document.querySelector('.sl:first-child').after(fc);
+
+const ttEl=document.getElementById('tt');
+ttEl.addEventListener('mouseenter',()=>clearTimeout(window._ttHide));
+ttEl.addEventListener('mouseleave',()=>delayHideTT(120));
+
+draw();
+</script>
+</body>
+</html>
